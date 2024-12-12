@@ -57,21 +57,26 @@ export class ContractWatcher {
 
     this.watching[watchId] = {
       start: () => {
-        this.watching[watchId].stop = this.client.watchContractEvent({
-          ...parameters,
-          onError: async (err) => {
-            if (this.timeoutError.has(watchId)) {
-              // Prevents error triggering multiple times
-              return;
-            }
-            this.timeoutError.add(watchId);
-            console.error(`Watching ${watchId} on chain ${this.chain.id} error: ${err.message}`);
-            await new Promise((resolve) => setTimeout(resolve, 60 * 1000)); // Wait 1 minute to prevent hitting rate limits on errors
-            this.watching[watchId].stop();
-            this.timeoutError.delete(watchId);
-            this.watching[watchId].start();
-          },
-        });
+        const onError = async (err: Error) => {
+          if (this.timeoutError.has(watchId)) {
+            // Prevents error triggering multiple times
+            return;
+          }
+          this.timeoutError.add(watchId);
+          console.error(`Watching ${watchId} on chain ${this.chain.id} error: ${err.message}`);
+          await new Promise((resolve) => setTimeout(resolve, 60 * 1000)); // Wait 1 minute to prevent hitting rate limits on errors
+          this.watching[watchId].stop();
+          this.timeoutError.delete(watchId);
+          this.watching[watchId].start();
+        };
+        try {
+          this.watching[watchId].stop = this.client.watchContractEvent({
+            ...parameters,
+            onError: onError,
+          });
+        } catch (err) {
+          onError(err instanceof Error ? err : new Error(`Unknown start watching error`));
+        }
       },
       stop: () => {},
       tryProcess: (logs) => {
